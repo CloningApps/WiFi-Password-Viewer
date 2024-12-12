@@ -3,7 +3,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <ctype.h>
-#include "wifi_password.h"
+#include "view.h"
 
 void trim(char *str) {
     char *end;
