@@ -3,9 +3,13 @@
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #define MAX_PATH 1024
 #define MAX_LINE 256
+
+int android_mode = 0;
+int no_root_mode = 0;
 
 void trim(char *str) {
     char *end;
@@ -46,33 +50,52 @@ void get_wifi_password(const char *file_path) {
     }
 }
 
-int main() {
-    if (geteuid() != 0) {
-        printf("This program requires root privileges. Please run with sudo.\n");
-        return 1;
-    }
-
-    const char *nm_dir = "/etc/NetworkManager/system-connections/";
+void process_directory(const char *dir_path) {
     DIR *dir;
     struct dirent *ent;
 
-    dir = opendir(nm_dir);
+    dir = opendir(dir_path);
     if (dir == NULL) {
-        printf("Error opening directory: %s\n", nm_dir);
+        printf("Error opening directory: %s\n", dir_path);
+        return;
+    }
+
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_type == DT_REG) {
+            char file_path[MAX_PATH];
+            snprintf(file_path, sizeof(file_path), "%s/%s", dir_path, ent->d_name);
+            get_wifi_password(file_path);
+        }
+    }
+
+    closedir(dir);
+}
+
+int main(int argc, char *argv[]) {
+    const char *nm_dir = "/etc/NetworkManager/system-connections/";
+    const char *android_dir = "/data/misc/wifi/";
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--android") == 0) {
+            android_mode = 1;
+        } else if (strcmp(argv[i], "--no-root") == 0) {
+            no_root_mode = 1;
+        }
+    }
+
+    if (!no_root_mode && geteuid() != 0) {
+        printf("This program requires root privileges. Please run with sudo or use --no-root.\n");
         return 1;
     }
 
     printf("WiFi Passwords:\n");
     printf("---\n");
 
-    while ((ent = readdir(dir)) != NULL) {
-        if (ent->d_type == DT_REG) {
-            char file_path[MAX_PATH];
-            snprintf(file_path, sizeof(file_path), "%s%s", nm_dir, ent->d_name);
-            get_wifi_password(file_path);
-        }
+    if (android_mode) {
+        process_directory(android_dir);
+    } else {
+        process_directory(nm_dir);
     }
 
-    closedir(dir);
     return 0;
 }
